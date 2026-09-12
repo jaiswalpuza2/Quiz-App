@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Constellation Quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void: #0B1026;
+    --panel: #141B34;
+    --panel-edge: #232B54;
+    --ink: #F5F3EE;
+    --ink-dim: #9CA3C4;
+    --gold: #E8B854;
+    --gold-dim: #6B5E3E;
+    --rose: #C4574B;
+    --rose-dim: #5A3A38;
+    --violet: #6B5B95;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--void);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    overflow-x:hidden;
+  }
+
+  #starfield{
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+  }
+  .bg-star{
+    position:absolute; width:2px; height:2px; border-radius:50%;
+    background: var(--ink);
+    opacity:0.25;
+    animation: twinkle 4s ease-in-out infinite;
+  }
+  @keyframes twinkle{
+    0%,100%{ opacity:0.15; }
+    50%{ opacity:0.7; }
+  }
+
+  .stage{
+    position:relative; z-index:1;
+    min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center;
+    padding: clamp(18px, 6vw, 32px) clamp(14px, 5vw, 20px) clamp(32px, 8vw, 60px);
+    padding-top: calc(clamp(18px, 6vw, 32px) + env(safe-area-inset-top));
+    padding-bottom: calc(clamp(32px, 8vw, 60px) + env(safe-area-inset-bottom));
+    padding-left: calc(clamp(14px, 5vw, 20px) + env(safe-area-inset-left));
+    padding-right: calc(clamp(14px, 5vw, 20px) + env(safe-area-inset-right));
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* --- Constellation progress map --- */
+  .map-wrap{
+    width:100%; max-width:560px;
+    margin-bottom: clamp(18px, 5vw, 28px);
+  }
+  @media (max-width:360px){
+    .map-wrap{ margin-bottom: 14px; }
+  }
+  .map-wrap svg{ width:100%; height:auto; display:block; }
+  .map-line{
+    stroke: var(--panel-edge);
+    stroke-width:1.5;
+    transition: stroke 0.6s ease;
+  }
+  .map-line.lit{ stroke: var(--violet); }
+  .map-node{
+    fill: var(--panel-edge);
+    stroke: none;
+    transition: fill 0.5s ease, r 0.4s ease;
+  }
+  .map-node.correct{ fill: var(--gold); filter: drop-shadow(0 0 6px rgba(232,184,84,0.8)); }
+  .map-node.wrong{ fill: var(--rose); filter: drop-shadow(0 0 4px rgba(196,87,75,0.6)); }
+  .map-node.current{ fill: var(--ink-dim); }
+
+  .eyebrow{
+    text-align:center;
+    color: var(--ink-dim);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+    min-height: 18px;
+  }
+
+  /* --- Card --- */
+  .card-slot{
+    position:relative;
+    width:100%; max-width:560px;
+    min-height: clamp(300px, 68vh, 340px);
+  }
+  .card{
+    position:absolute; inset:0;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 18px;
+    padding: clamp(22px, 6vw, 40px) clamp(18px, 5vw, 36px);
+    display:flex; flex-direction:column;
+    transition: transform 0.5s cubic-bezier(.4,0,.2,1), opacity 0.4s ease;
+    overflow-y: auto;
+  }
+  .card.enter{
+    animation: cardIn 0.55s cubic-bezier(.16,1,.3,1) both;
+  }
+  .card.exit{
+    animation: cardOut 0.42s cubic-bezier(.4,0,.7,1) both;
+  }
+  @keyframes cardIn{
+    from{ transform: translateY(18px) rotate(-1.2deg); opacity:0; }
+    to{ transform: translateY(0) rotate(0); opacity:1; }
+  }
+  @keyframes cardOut{
+    from{ transform: translateY(0) rotate(0); opacity:1; }
+    to{ transform: translateY(-14px) rotate(1.5deg) translateX(30px); opacity:0; }
+  }
+
+  .q-count{
+    font-family:'Fraunces', serif;
+    font-size: clamp(13px, 3vw, 15px);
+    color: var(--ink-dim);
+    margin-bottom: clamp(10px, 3vw, 14px);
+  }
+  .q-text{
+    font-family:'Fraunces', serif;
+    font-weight:500;
+    font-size: clamp(19px, 5.5vw, 26px);
+    line-height:1.35;
+    margin: 0 0 clamp(18px, 5vw, 28px) 0;
+  }
+
+  .options{
+    display:grid; grid-template-columns: 1fr 1fr; gap:12px;
+    margin-top:auto;
+  }
+  @media (max-width:520px){
+    .options{ grid-template-columns: 1fr; }
+  }
+
+  .opt{
+    position:relative;
+    background: transparent;
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-size: clamp(14px, 3.6vw, 15px);
+    text-align:left;
+    padding: 14px 16px;
+    min-height: 44px;
+    display:flex; align-items:center;
+    border-radius: 10px;
+    cursor:pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.25s ease, background 0.25s ease, transform 0.15s ease;
+  }
+  .opt:hover:not(:disabled){
+    border-color: var(--violet);
+    transform: translateY(-1px);
+  }
+  .opt:disabled{ cursor:default; }
+  .opt.correct{
+    border-color: var(--gold);
+    background: rgba(232,184,84,0.08);
+    color: var(--gold);
+  }
+  .opt.wrong{
+    border-color: var(--rose);
+    background: rgba(196,87,75,0.08);
+    color: var(--rose);
+    animation: shake 0.4s ease;
+  }
+  .opt.faded{ opacity:0.35; }
+  @keyframes shake{
+    0%,100%{ transform: translateX(0); }
+    25%{ transform: translateX(-4px); }
+    75%{ transform: translateX(4px); }
+  }
+
+  /* particle burst */
+  .burst{
+    position:absolute; inset:0; pointer-events:none; overflow:visible;
+  }
+  .particle{
+    position:absolute; width:5px; height:5px; border-radius:50%;
+    background: var(--gold);
+    animation: fly 0.7s ease-out forwards;
+  }
+  @keyframes fly{
+    to{ transform: translate(var(--dx), var(--dy)) scale(0); opacity:0; }
+  }
+
+  /* --- End screen --- */
+  .end-wrap{
+    width:100%; max-width:560px;
+    text-align:center;
+  }
+  .end-label{
+    color: var(--ink-dim); font-size:14px; margin-bottom:10px;
+  }
+  .end-name{
+    font-family:'Fraunces', serif; font-style:italic;
+    font-weight:500;
+    font-size: clamp(28px, 8vw, 40px);
+    color: var(--gold);
+    margin: 0 0 6px 0;
+    opacity:0;
+    animation: fadeUp 0.8s ease 0.4s forwards;
+    word-wrap: break-word;
+  }
+  .end-sub{
+    color: var(--ink-dim); font-size: clamp(13px, 3.6vw, 15px); margin-bottom:32px;
+    opacity:0;
+    animation: fadeUp 0.8s ease 0.6s forwards;
+  }
+  @keyframes fadeUp{
+    from{ opacity:0; transform: translateY(10px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+  .end-map{ width:100%; max-width: 480px; margin: 0 auto 32px; }
+  .end-line{
+    stroke: var(--violet);
+    stroke-width: 1.5;
+    stroke-dasharray: 200;
+    stroke-dashoffset: 200;
+    animation: draw 0.5s ease forwards;
+  }
+  @keyframes draw{ to{ stroke-dashoffset:0; } }
+  .end-node{ transition: r 0.3s ease; }
+
+  .score-line{
+    font-size: clamp(14px, 3.8vw, 16px); color: var(--ink-dim); margin-bottom: 30px;
+  }
+  .score-line strong{ color: var(--ink); }
+
+  .restart{
+    background: transparent;
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-size: 15px;
+    padding: 12px 28px;
+    min-height: 44px;
+    border-radius: 999px;
+    cursor:pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.25s ease, background 0.25s ease;
+  }
+  .restart:hover{ border-color: var(--gold); background: rgba(232,184,84,0.06); }
+
+  .sweep{
+    animation: sweepOut 0.6s ease forwards;
+  }
+  @keyframes sweepOut{
+    to{ transform: translateX(120vw) rotate(8deg); opacity:0; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
+  .opt:focus-visible, .restart:focus-visible{
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div id="starfield"></div>
+
+<div class="stage" id="stage">
+  <div class="map-wrap">
+    <svg id="mapSvg" viewBox="0 0 600 110" fill="none"></svg>
+  </div>
+  <div class="eyebrow" id="eyebrow"></div>
+  <div class="card-slot" id="cardSlot"></div>
+</div>
+
+<script>
+(function(){
+
+  const questions = [
+    {
+      q: "Which planet has the most moons confirmed in our solar system?",
+      options: ["Jupiter", "Saturn", "Neptune", "Uranus"],
+      correct: 1
+    },
+    {
+      q: "The Great Wall of China was primarily built to defend against which group?",
+      options: ["Mongol and nomadic invasions", "Japanese fleets", "Roman legions", "Persian armies"],
+      correct: 0
+    },
+    {
+      q: "Which element has the chemical symbol 'Au'?",
+      options: ["Silver", "Aluminum", "Gold", "Argon"],
+      correct: 2
+    },
+    {
+      q: "Who wrote the novel '1984'?",
+      options: ["Aldous Huxley", "George Orwell", "Ray Bradbury", "H.G. Wells"],
+      correct: 1
+    },
+    {
+      q: "What is the smallest prime number?",
+      options: ["0", "1", "2", "3"],
+      correct: 2
+    },
+    {
+      q: "Which ocean is the largest by surface area?",
+      options: ["Atlantic", "Indian", "Arctic", "Pacific"],
+      correct: 3
+    },
+    {
+      q: "The 'Mona Lisa' is displayed in which museum?",
+      options: ["The British Museum", "The Louvre", "The Uffizi Gallery", "The Prado"],
+      correct: 1
+    },
+    {
+      q: "Which gas do plants primarily absorb for photosynthesis?",
+      options: ["Oxygen", "Nitrogen", "Carbon dioxide", "Hydrogen"],
+      correct: 2
+    }
+  ];
+
+  const N = questions.length;
+  let idx = 0;
+  let answers = []; // {correct: bool}
+  let locked = false;
+
+  // ---- star positions for constellation map (zigzag arc) ----
+  const nodePositions = [];
+  for(let i=0;i<N;i++){
+    const x = 30 + i * (540 / (N-1));
+    const y = 55 + Math.sin(i*1.3) * 30;
+    nodePositions.push({x, y});
+  }
+
+  const stage = document.getElementById('stage');
+  const mapSvg = document.getElementById('mapSvg');
+  const eyebrow = document.getElementById('eyebrow');
+  const cardSlot = document.getElementById('cardSlot');
+
+  // background starfield
+  const sf = document.getElementById('starfield');
+  for(let i=0;i<70;i++){
+    const s = document.createElement('div');
+    s.className = 'bg-star';
+    s.style.left = Math.random()*100 + 'vw';
+    s.style.top = Math.random()*100 + 'vh';
+    s.style.animationDelay = (Math.random()*4) + 's';
+    sf.appendChild(s);
+  }
+
+  function renderMap(){
+    let svg = '';
+    for(let i=0;i<N-1;i++){
+      const a = nodePositions[i], b = nodePositions[i+1];
+      const lit = i < idx || (i === idx-1);
+      svg += `<line class="map-line ${lit ? 'lit':''}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
+    }
+    for(let i=0;i<N;i++){
+      const p = nodePositions[i];
+      let cls = 'map-node';
+      let r = 4;
+      if(answers[i]){
+        cls += answers[i].correct ? ' correct' : ' wrong';
+        r = 5;
+      } else if(i === idx){
+        cls += ' current';
+        r = 5;
+      }
+      svg += `<circle class="${cls}" cx="${p.x}" cy="${p.y}" r="${r}"/>`;
+    }
+    mapSvg.innerHTML = svg;
+  }
+
+  function spawnBurst(container){
+    const burst = document.createElement('div');
+    burst.className = 'burst';
+    for(let i=0;i<14;i++){
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const angle = (Math.PI*2*i)/14 + Math.random()*0.3;
+      const dist = 40 + Math.random()*40;
+      p.style.setProperty('--dx', Math.cos(angle)*dist + 'px');
+      p.style.setProperty('--dy', Math.sin(angle)*dist + 'px');
+      p.style.left = '50%';
+      p.style.top = '18px';
+      burst.appendChild(p);
+    }
+    container.appendChild(burst);
+    setTimeout(()=> burst.remove(), 750);
+  }
+
+  function renderCard(){
+    eyebrow.textContent = `Star ${idx+1} of ${N}`;
+    const q = questions[idx];
+    const card = document.createElement('div');
+    card.className = 'card enter';
+    card.innerHTML = `
+      <div class="q-count">Question ${idx+1}</div>
+      <p class="q-text">${q.q}</p>
+      <div class="options">
+        ${q.options.map((o,i)=>`<button class="opt" data-i="${i}">${o}</button>`).join('')}
+      </div>
+    `;
+    cardSlot.innerHTML = '';
+    cardSlot.appendChild(card);
+
+    const btns = card.querySelectorAll('.opt');
+    btns.forEach(btn=>{
+      btn.addEventListener('click', ()=> handleAnswer(parseInt(btn.dataset.i), card, btns));
+    });
+
+    function keyHandler(e){
+      if(locked) return;
+      const n = parseInt(e.key);
+      if(n>=1 && n<=q.options.length){
+        handleAnswer(n-1, card, btns);
+      }
+    }
+    document.addEventListener('keydown', keyHandler, {once:false});
+    card._keyHandler = keyHandler;
+  }
+
+  function handleAnswer(choice, card, btns){
+    if(locked) return;
+    locked = true;
+    document.removeEventListener('keydown', card._keyHandler);
+    const q = questions[idx];
+    const isCorrect = choice === q.correct;
+    answers[idx] = {correct: isCorrect};
+
+    btns.forEach((b,i)=>{
+      b.disabled = true;
+      if(i === q.correct) b.classList.add('correct');
+      if(i === choice && !isCorrect) b.classList.add('wrong');
+      if(i !== choice && i !== q.correct) b.classList.add('faded');
+    });
+
+    if(isCorrect) spawnBurst(card);
+    renderMap();
+
+    setTimeout(()=>{
+      card.classList.remove('enter');
+      card.classList.add('exit');
+      setTimeout(()=>{
+        idx++;
+        locked = false;
+        if(idx < N){
+          renderCard();
+          renderMap();
+        } else {
+          renderEnd();
+        }
+      }, 420);
+    }, 900);
+  }
+
+  // ---- name generator ----
+  const adjectives = ["Wandering","Radiant","Silent","Curious","Fractured","Luminous","Restless","Hidden","Quiet","Errant"];
+  const nouns = ["Voyager","Compass","Ember","Tide","Archive","Signal","Horizon","Drift","Lantern","Current"];
+
+  function constellationName(){
+    let hash = 0;
+    answers.forEach((a,i)=>{ hash += (a.correct?1:0) * (i+3) * 7; });
+    const correctCount = answers.filter(a=>a.correct).length;
+    const ai = (hash + correctCount) % adjectives.length;
+    const ni = (hash * 3 + N) % nouns.length;
+    return `The ${adjectives[ai]} ${nouns[ni]}`;
+  }
+
+  function renderEnd(){
+    const correctCount = answers.filter(a=>a.correct).length;
+    const name = constellationName();
+
+    eyebrow.textContent = '';
+    cardSlot.innerHTML = '';
+    document.querySelector('.map-wrap').classList.add('sweep-target');
+
+    let linesHtml = '';
+    for(let i=0;i<N-1;i++){
+      const a = nodePositions[i], b = nodePositions[i+1];
+      linesHtml += `<line class="end-line" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" style="animation-delay:${0.1 + i*0.08}s"/>`;
+    }
+    let nodesHtml = '';
+    nodePositions.forEach((p,i)=>{
+      const correct = answers[i] && answers[i].correct;
+      nodesHtml += `<circle class="end-node" cx="${p.x}" cy="${p.y}" r="6" fill="${correct ? 'var(--gold)' : 'var(--rose)'}" filter="drop-shadow(0 0 6px ${correct ? 'rgba(232,184,84,0.7)' : 'rgba(196,87,75,0.5)'})"/>`;
+    });
+
+    const wrap = document.createElement('div');
+    wrap.className = 'end-wrap';
+    wrap.innerHTML = `
+      <div class="end-label">Your sky is complete</div>
+      <h1 class="end-name">${name}</h1>
+      <p class="end-sub">${correctCount} of ${N} stars burn bright tonight</p>
+      <svg class="end-map" viewBox="0 0 600 110" fill="none">${linesHtml}${nodesHtml}</svg>
+      <div class="score-line">You answered <strong>${correctCount}</strong> out of <strong>${N}</strong> correctly.</div>
+      <button class="restart" id="restartBtn">Chart a new sky</button>
+    `;
+    cardSlot.parentElement.insertBefore(wrap, cardSlot);
+    cardSlot.remove();
+    document.querySelector('.map-wrap').remove();
+
+    document.getElementById('restartBtn').addEventListener('click', ()=>{
+      wrap.classList.add('sweep');
+      setTimeout(()=> location.reload(), 500);
+    });
+  }
+
+  renderMap();
+  renderCard();
+
+})();
+</script>
+
+</body>
+</html>
